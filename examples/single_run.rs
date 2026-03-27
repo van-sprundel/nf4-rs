@@ -1,7 +1,4 @@
-#[allow(unused)]
-mod nf4;
-
-use nf4::*;
+use nf4_rs::nf4::*;
 
 fn main() {
     let weights = vec![-0.89, 0.16, 0.08, -0.13, 0.16, -0.54];
@@ -27,5 +24,3 @@ fn main() {
         println!("{orig:+.4} -> {deq:+.4}  (error {err:5.1}%)");
     }
 }
-
-

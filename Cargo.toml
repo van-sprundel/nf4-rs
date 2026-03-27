@@ -4,3 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+safetensors = "0.5"
+memmap2 = "0.9"
+half = "2"
+
+[[example]]
+name = "qwen2"
+path = "examples/qwen2.rs"
+
+[[example]]
+name = "single_run"
+path = "examples/single_run.rs"

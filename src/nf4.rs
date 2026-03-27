@@ -99,3 +99,105 @@ impl NF4Block {
         4 + self.data.len()
     }
 }
+
+pub struct ErrorStats {
+    pub mean_abs: f32,
+    pub max_abs: f32,
+    pub p99_abs: f32,
+}
+
+impl ErrorStats {
+    pub fn compute(original: &[f32], restored: &[f32]) -> Self {
+        let mut errors: Vec<f32> = original
+            .iter()
+            .zip(restored.iter())
+            .map(|(a, b)| (a - b).abs())
+            .collect();
+        let n = errors.len();
+        let mean_abs = errors.iter().sum::<f32>() / n as f32;
+        errors.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+        let max_abs = errors[n - 1];
+        let p99_abs = errors[(n as f64 * 0.99) as usize];
+        Self {
+            mean_abs,
+            max_abs,
+            p99_abs,
+        }
+    }
+
+    /// relative error: |orig - restored| / |orig|
+    // skipping near-zero original
+    pub fn compute_relative(original: &[f32], restored: &[f32]) -> Self {
+        let eps = 1e-10;
+        let mut errors: Vec<f32> = original
+            .iter()
+            .zip(restored.iter())
+            .filter(|(a, _)| a.abs() > eps)
+            .map(|(a, b)| ((a - b) / a).abs())
+            .collect();
+        let n = errors.len();
+        if n == 0 {
+            return Self {
+                mean_abs: 0.0,
+                max_abs: 0.0,
+                p99_abs: 0.0,
+            };
+        }
+        let mean_abs = errors.iter().sum::<f32>() / n as f32;
+        errors.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+        let max_abs = errors[n - 1];
+        let p99_abs = errors[((n as f64 * 0.99) as usize).min(n - 1)];
+        Self {
+            mean_abs,
+            max_abs,
+            p99_abs,
+        }
+    }
+}
+
+impl std::fmt::Display for ErrorStats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "mean={:.6} max={:.6} p99={:.6}",
+            self.mean_abs, self.max_abs, self.p99_abs
+        )
+    }
+}
+
+// the paper talks about double-quantizing, using larger blocks.
+// i want to know which block size has the lowest error rate
+// and even that doesnt really tell me much...
+pub struct NF4Tensor {
+    pub block_size: usize,
+    pub blocks: Vec<NF4Block>,
+    pub len: usize,
+}
+
+impl NF4Tensor {
+    pub fn quantize(weights: &[f32], block_size: usize) -> Self {
+        let blocks = weights.chunks(block_size).map(NF4Block::quantize).collect();
+
+        Self {
+            block_size,
+            blocks,
+            len: weights.len(),
+        }
+    }
+
+    pub fn dequantize(&self) -> Vec<f32> {
+        let mut out = Vec::with_capacity(self.len);
+        for block in &self.blocks {
+            out.extend(block.dequantize());
+        }
+        out
+    }
+
+    pub fn size_bytes(&self) -> usize {
+        self.blocks.iter().map(|b| b.size_bytes()).sum()
+    }
+
+    pub fn compression_ratio(&self, original_bytes: usize) -> f32 {
+        (original_bytes as f32) / (self.size_bytes() as f32)
+    }
+}
